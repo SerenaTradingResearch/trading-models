@@ -5,7 +5,7 @@ with open("README.md", encoding="utf-8") as f:
 
 setup(
     name="trading-models",
-    version="0.1.0",
+    version="0.1.1",
     author="Ricky Ding",
     author_email="e0134117@u.nus.edu",
     description="MLP, CNN, Transformer models for time-series trading predictions.",
