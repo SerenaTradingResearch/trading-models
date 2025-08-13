@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch as tc
 import torch.nn as nn
+from PIL import Image
 from torch.utils.data import Dataset
 
 
@@ -31,8 +32,17 @@ D_TYPE = Dict[str, np.ndarray]
 D2_TYPE = Dict[str, D_TYPE]
 
 
-def slice_xy(xy: D2_TYPE, i1, i2):
-    return {sym: {"x": d["x"][i1:i2], "y": d["y"][i1:i2]} for sym, d in xy.items()}
+def slice_xy(xy: D2_TYPE, r1, r2, num=None):
+    xy2 = {}
+    for sym, d in xy.items():
+        x, y = d["x"], d["y"]
+        n = len(x)
+        i1, i2 = int(r1 * n), int(r2 * n)
+        step = max(1, (i2 - i1) // num) if num else 1
+        x, y = x[i1:i2:step], y[i1:i2:step]
+        xy2[sym] = dict(x=x, y=y)
+    print(f"slice_xy: n: {n}, i1: {i1}, i2: {i2}, step: {step}, n2: {len(x)}")
+    return xy2
 
 
 def timer(func):
@@ -46,19 +56,70 @@ def timer(func):
 
 
 def tensor(x):
+    if isinstance(x, np.ndarray):
+        return tc.from_numpy(x.copy()).float()
     if isinstance(x, dict):
         return {k: tensor(v) for k, v in x.items()}
     if isinstance(x, list):
         return [tensor(v) for v in x]
-    if isinstance(x, np.ndarray):
-        return tc.from_numpy(x.copy()).float()
+    return x
+
+
+def to_np(x):
+    if isinstance(x, tc.Tensor):
+        return x.detach().numpy()
+    if isinstance(x, dict):
+        return {k: to_np(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return np.array([to_np(v) for v in x])
+    return x
+
+
+def shape(x):
+    if isinstance(x, (np.ndarray, tc.Tensor)):
+        return x.shape
+    if isinstance(x, dict):
+        return {k: shape(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return {shape(v) for v in x}
 
 
 # ==================================
 
 
+def plot_general(plots: D_TYPE, id, C=2):
+    R = int(np.ceil(len(plots) / C))
+    plt.figure(figsize=(4 * C, 3 * R))
+    i = 0
+    for k, v in plots.items():
+        v = to_np(v)
+        i += 1
+        plt.subplot(R, C, i)
+        plt.title(k)
+        if k.endswith("dist"):
+            if isinstance(v, dict):
+                plt.hist(v["x"].flatten(), bins=100, range=v["range"])
+            else:
+                v = v.flatten()
+                mean, std = v.mean(), v.std() * 3
+                plt.hist(v, bins=100, range=[mean - std, mean + std])
+        else:
+            x = np.arange(len(v))
+            if np.any(np.isnan(v)):
+                plt.scatter(x, v, s=3)
+            else:
+                plt.plot(x, v)
+    plt.tight_layout()
+    plt.savefig(id)
+    plt.close()
+
+
+def transpose_records(records: List[Dict]):
+    return {k: np.array([r[k] for r in records]) for k in records[0]}
+
+
 def plot_records(records: List[Dict], id, C=1):
-    dic = {k: np.array([r[k] for r in records]) for k in records[0]}
+    dic = transpose_records(records)
     R = int(np.ceil(len(dic) / C))
     plt.figure(figsize=(4 * C, 3 * R))
     i = 0
@@ -66,7 +127,11 @@ def plot_records(records: List[Dict], id, C=1):
         i += 1
         plt.subplot(R, C, i)
         plt.title(k)
-        plt.plot(v)
+        x = np.arange(len(v))
+        if np.any(np.isnan(v)):
+            plt.scatter(x, v, s=3)
+        else:
+            plt.plot(x, v)
     plt.tight_layout()
     plt.savefig(id)
     plt.close()
@@ -92,3 +157,25 @@ def plot_xy(xy: D2_TYPE, id="xy"):
     plt.tight_layout()
     plt.savefig(id)
     plt.close()
+
+
+# =====================
+
+
+class GIFMaker:
+    def __init__(s):
+        s.frames: List[Image.Image] = []
+
+    def add(s, path):
+        s.frames.append(Image.open(path).copy())
+
+    def save(s, id, fps=10):
+        s.frames[0].save(
+            f"{id}.gif",
+            format="GIF",
+            append_images=s.frames[1:],
+            save_all=True,
+            duration=int(1000 / fps),
+            loop=0,
+            optimize=True,
+        )
