@@ -97,12 +97,12 @@ def plot_general(plots: D_TYPE, id, C=2):
         plt.subplot(R, C, i)
         plt.title(k)
         if k.endswith("dist"):
-            if isinstance(v, dict):
-                plt.hist(v["x"].flatten(), bins=100, range=v["range"])
-            else:
-                v = v.flatten()
-                mean, std = v.mean(), v.std() * 3
-                plt.hist(v, bins=100, range=[mean - std, mean + std])
+            v = v.flatten()
+            mean, std = v.mean(), v.std() * 3
+            try:
+                plt.hist(v, bins="auto", range=[mean - std, mean + std])
+            except Exception as e:
+                print(f"Error in plot_general: {e}. {v.min()} {v.max()}")
         else:
             x = np.arange(len(v))
             if np.any(np.isnan(v)):

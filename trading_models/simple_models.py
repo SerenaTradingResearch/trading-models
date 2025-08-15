@@ -5,19 +5,20 @@ import torch.nn as nn
 
 
 class MLP(nn.Module):
-    def __init__(s, sizes, Act=nn.SiLU):
+    def __init__(s, sizes, Act=nn.ReLU):
         super().__init__()
         layers = []
-        for a, b in zip(sizes[:-1], sizes[1:]):
+        for a, b in zip(sizes[:-2], sizes[1:-1]):
             layers += [nn.Linear(a, b), Act()]
-        s.mlp = nn.Sequential(*layers[:-1])
+        layers += [nn.Linear(sizes[-2], sizes[-1])]
+        s.mlp = nn.Sequential(*layers)
 
     def forward(s, x: tc.Tensor):
         return s.mlp(x.view(x.size(0), -1))
 
 
 class CNN(nn.Module):
-    def __init__(s, sizes, Act=nn.SiLU, kernel=3, pad=1):
+    def __init__(s, sizes, Act=nn.ReLU, kernel=3, pad=1):
         super().__init__()
         layers = []
         for a, b in zip(sizes[:-2], sizes[1:-1]):
