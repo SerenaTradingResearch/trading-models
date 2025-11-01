@@ -1,5 +1,5 @@
 import time
-from typing import Dict, List
+from typing import Callable, Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -30,6 +30,43 @@ class WindowDataset(Dataset):
 
 D_TYPE = Dict[str, np.ndarray]
 D2_TYPE = Dict[str, D_TYPE]
+T2_TYPE = Dict[str, Dict[str, tc.Tensor]]
+LOSS_FN_TYPE = Callable[[T2_TYPE, str], Tuple[tc.Tensor, Dict]]
+
+
+def train_model(
+    net: nn.Module,
+    xy_train: D2_TYPE,
+    xy_test: D2_TYPE,
+    loss_fn: LOSS_FN_TYPE,
+    id="train_model",
+    lr=1e-3,
+    n_epoch=10000,
+    f_test=10,
+    f_plot=20,
+):
+    xy_train, xy_test = tensor(xy_train), tensor(xy_test)
+    opt = tc.optim.AdamW(net.parameters(), lr=lr)
+    records, gif = [], GIFMaker()
+
+    for e in range(1, n_epoch + 1):
+        loss_test = np.nan
+        if e % f_test == 0:
+            net.eval()
+            with tc.no_grad():
+                loss_test, plots_test = loss_fn(xy_test, "test")
+            net.train()
+        opt.zero_grad()
+        loss_train, plots_train = loss_fn(xy_train, "train")
+        loss_train.backward()
+        opt.step()
+        records.append(dict(loss_train=loss_train.item(), loss_test=loss_test))
+        if e % f_plot == 0:
+            plots = transpose_records(records)
+            plots = {**plots, **plots_train, **plots_test}
+            plot_general(plots, f"{id}.png")
+            gif.add(f"{id}.png")
+    gif.save(id)
 
 
 def slice_xy(xy: D2_TYPE, r1, r2, num=None):
@@ -87,7 +124,7 @@ def shape(x):
 # ==================================
 
 
-def plot_general(plots: D_TYPE, id, C=2):
+def plot_general(plots: D_TYPE, id, C=2, bins=100):
     R = int(np.ceil(len(plots) / C))
     plt.figure(figsize=(4 * C, 3 * R))
     i = 0
@@ -100,7 +137,7 @@ def plot_general(plots: D_TYPE, id, C=2):
             v = v.flatten()
             mean, std = v.mean(), v.std() * 3
             try:
-                plt.hist(v, bins="auto", range=[mean - std, mean + std])
+                plt.hist(v, bins=bins, range=[mean - std, mean + std])
             except Exception as e:
                 print(f"Error in plot_general: {e}. {v.min()} {v.max()}")
         else:
