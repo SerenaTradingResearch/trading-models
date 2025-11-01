@@ -8,6 +8,8 @@ import torch.nn as nn
 from PIL import Image
 from torch.utils.data import Dataset
 
+DEVICE = tc.device("cuda" if tc.cuda.is_available() else "cpu")
+
 
 def model_size(m: nn.Module):
     a = sum(p.numel() for p in m.parameters())
@@ -45,6 +47,7 @@ def train_model(
     f_test=10,
     f_plot=20,
 ):
+    net.to(DEVICE)
     xy_train, xy_test = tensor(xy_train), tensor(xy_test)
     opt = tc.optim.AdamW(net.parameters(), lr=lr)
     records, gif = [], GIFMaker()
@@ -60,7 +63,7 @@ def train_model(
         loss_train, plots_train = loss_fn(xy_train, "train")
         loss_train.backward()
         opt.step()
-        records.append(dict(loss_train=loss_train.item(), loss_test=loss_test))
+        records.append(dict(loss_train=loss_train.item(), loss_test=to_np(loss_test)))
         if e % f_plot == 0:
             plots = transpose_records(records)
             plots = {**plots, **plots_train, **plots_test}
@@ -94,7 +97,7 @@ def timer(func):
 
 def tensor(x):
     if isinstance(x, np.ndarray):
-        return tc.from_numpy(x.copy()).float()
+        return tc.from_numpy(x.copy()).float().to(DEVICE)
     if isinstance(x, dict):
         return {k: tensor(v) for k, v in x.items()}
     if isinstance(x, list):
@@ -104,7 +107,7 @@ def tensor(x):
 
 def to_np(x):
     if isinstance(x, tc.Tensor):
-        return x.detach().numpy()
+        return x.detach().cpu().numpy()
     if isinstance(x, dict):
         return {k: to_np(v) for k, v in x.items()}
     if isinstance(x, list):
