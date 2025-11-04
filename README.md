@@ -2,6 +2,9 @@
 ## Intro
 
 - Neural Network models for trading: MLP, CNN, Transformer
+- Below shows the training process of my private model
+
+![](https://raw.githubusercontent.com/SerenaTradingResearch/trading-models/main/test/train_model.gif)
 
 ## Usage
 
