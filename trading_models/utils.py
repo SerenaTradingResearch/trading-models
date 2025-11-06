@@ -52,24 +52,29 @@ def train_model(
     opt = tc.optim.AdamW(net.parameters(), lr=lr)
     records, gif = [], GIFMaker()
 
-    for e in range(1, n_epoch + 1):
-        loss_test = np.nan
+    for e in range(n_epoch):
+        loss_test, info_test = np.nan, {}
         if e % f_test == 0:
             net.eval()
             with tc.no_grad():
-                loss_test, plots_test = loss_fn(xy_test, "test")
+                loss_test, info_test, plots_test = loss_fn(xy_test, "test")
             net.train()
         opt.zero_grad()
-        loss_train, plots_train = loss_fn(xy_train, "train")
+        loss_train, info_train, plots_train = loss_fn(xy_train, "train")
         loss_train.backward()
         opt.step()
-        records.append(dict(loss_train=loss_train.item(), loss_test=to_np(loss_test)))
+        rec = {"a_loss_train": loss_train, "a_loss_test": loss_test}
+        records.append({**rec, **info_train, **info_test})
         if e % f_plot == 0:
             plots = transpose_records(records)
             plots = {**plots, **plots_train, **plots_test}
-            plot_general(plots, f"{id}.png")
+            plot_general(dict(sorted(plots.items())), f"{id}.png")
             gif.add(f"{id}.png")
     gif.save(id)
+
+
+def mod_keys(dic: Dict, post):
+    return {f"{k}_{post}": v for k, v in dic.items()}
 
 
 def slice_xy(xy: D2_TYPE, r1, r2, num=None):
@@ -136,13 +141,11 @@ def plot_general(plots: D_TYPE, id, C=2, bins=100):
         i += 1
         plt.subplot(R, C, i)
         plt.title(k)
-        if k.endswith("dist"):
+        if "_hist" in k:
             v = v.flatten()
-            mean, std = v.mean(), v.std() * 3
-            try:
+            if len(v):
+                mean, std = v.mean(), v.std() * 3
                 plt.hist(v, bins=bins, range=[mean - std, mean + std])
-            except Exception as e:
-                print(f"Error in plot_general: {e}. {v.min()} {v.max()}")
         else:
             x = np.arange(len(v))
             if np.any(np.isnan(v)):
@@ -155,7 +158,7 @@ def plot_general(plots: D_TYPE, id, C=2, bins=100):
 
 
 def transpose_records(records: List[Dict]):
-    return {k: np.array([r[k] for r in records]) for k in records[0]}
+    return {k: np.array([to_np(r.get(k, np.nan)) for r in records]) for k in records[0]}
 
 
 def plot_records(records: List[Dict], id, C=1):
